@@ -15,6 +15,14 @@ public class ServiceBayApplication {
     public static void main(String[] args) {
         // Run the JVM in UTC; shop-local time comes from app.zone.
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
-        SpringApplication.run(ServiceBayApplication.class, args);
+        SpringApplication app = new SpringApplication(ServiceBayApplication.class);
+        boolean demo = com.servicebay.demo.DemoLauncher.isDemoBuild();
+        if (demo) com.servicebay.demo.DemoLauncher.configure(app);
+        try {
+            app.run(args);
+        } catch (RuntimeException e) {
+            if (demo) com.servicebay.demo.DemoLauncher.failed(e);
+            throw e;
+        }
     }
 }
