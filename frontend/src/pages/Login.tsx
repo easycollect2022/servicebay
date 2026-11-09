@@ -10,7 +10,7 @@ import type { Role } from '../lib/types'
 export const ROLE_HINT_KEY = 'sb.roleHint'
 
 export default function Login() {
-  const { devLogin } = useAuth()
+  const { devLogin, authError } = useAuth()
   const [role, setRole] = useState<Role>('CUSTOMER')
   const [mobile, setMobile] = useState('')
   const [otp, setOtp] = useState('')
@@ -60,6 +60,7 @@ export default function Login() {
 
   async function dev() {
     if (!isValidMobile(mobile)) return setError('Enter a valid 10-digit mobile number')
+    setError(null)
     setBusy(true)
     try { await devLogin(mobile, name || (role === 'MERCHANT' ? 'Shop owner' : 'Customer')) } finally { setBusy(false) }
   }
@@ -106,7 +107,7 @@ export default function Login() {
           </div>
         )}
 
-        <ErrorBox msg={error} />
+        <ErrorBox msg={error ?? authError} />
 
         {firebaseEnabled && (confirm
           ? <button className="btn-primary w-full" disabled={busy} onClick={verifyOtp}>Verify &amp; continue</button>
@@ -119,7 +120,7 @@ export default function Login() {
               <label className="label" htmlFor="name">Your name</label>
               <input id="name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <button className="btn-primary w-full" disabled={busy} onClick={dev}>Dev login (no SMS)</button>
+            <button className="btn-primary w-full" disabled={busy} onClick={dev}>{busy ? 'Signing in…' : 'Dev login (no SMS)'}</button>
           </>
         )}
         {!firebaseEnabled && !devAuthEnabled && (

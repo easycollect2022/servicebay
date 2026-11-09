@@ -5,9 +5,11 @@ import App from './App'
 import { AuthProvider } from './lib/auth'
 import { ToastProvider } from './components/ui'
 import { registerServiceWorker } from './lib/push'
+import { pingServer } from './lib/api'
 import './index.css'
 
 registerServiceWorker().catch(() => undefined)
+pingServer()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -4,6 +4,7 @@ import { Icon } from './Icon'
 import { STATUS } from '../lib/format'
 import type { BookingStatus } from '../lib/types'
 import { onForegroundPush } from '../lib/push'
+import { onServerWaking } from '../lib/api'
 
 export function Page({ children, bottomNav, className = '' }: { children: ReactNode; bottomNav?: ReactNode; className?: string }) {
   return (
@@ -121,9 +122,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setItems((x) => x.filter((t) => t.id !== id)), 5000)
   }, [])
   useEffect(() => onForegroundPush(show), [show])
+  const [waking, setWaking] = useState(false)
+  useEffect(() => onServerWaking(setWaking), [])
   return (
     <ToastCtx.Provider value={show}>
       {children}
+      {waking && (
+        <div role="status" className="fixed inset-x-0 bottom-24 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-[#3A4458] bg-[#232B38] p-3.5 shadow-xl">
+          <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-line border-t-mint" />
+          <span className="text-sm"><strong className="block">Waking up the server…</strong><span className="text-muted">Free hosting sleeps when idle. This can take up to a minute.</span></span>
+        </div>
+      )}
       <div className="pointer-events-none fixed inset-x-0 top-3 z-50 mx-auto flex max-w-md flex-col gap-2 px-3" aria-live="polite">
         {items.map((t) => {
           const inner = (

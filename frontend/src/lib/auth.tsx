@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from './firebase'
-import { api, devToken } from './api'
+import { api, ApiError, devToken } from './api'
 import type { Me, Role } from './types'
 import { enablePush } from './push'
 
@@ -12,6 +12,7 @@ interface AuthState {
   refresh: () => Promise<Me | null>
   chooseRole: (role: Role, name?: string) => Promise<Me>
   devLogin: (phone: string, name: string) => Promise<void>
+  authError: string | null
   logout: () => Promise<void>
 }
 
@@ -21,17 +22,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [signedIn, setSignedIn] = useState(false)
   const [me, setMe] = useState<Me | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
+      setAuthError(null)
       const m = await api<Me>('/api/me')
       setMe(m)
       setSignedIn(true)
       if (m.role) enablePush().catch(() => undefined)
       return m
-    } catch {
+    } catch (e) {
       setMe(null)
       setSignedIn(false)
+      if (e instanceof ApiError && e.status === 401) {
+        setAuthError(devToken.get()
+          ? 'Dev login is turned off on the server (set AUTH_DEV_MODE=true) or the login expired.'
+          : 'Your session expired. Please sign in again.')
+        devToken.set(null)
+      } else {
+        setAuthError(e instanceof Error ? e.message : 'Could not sign in. Please try again.')
+      }
       return null
     }
   }, [])
@@ -69,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <Ctx.Provider value={{ loading, signedIn, me, refresh, chooseRole, devLogin, logout }}>
+    <Ctx.Provider value={{ loading, signedIn, me, refresh, chooseRole, devLogin, logout, authError }}>
       {children}
     </Ctx.Provider>
   )
