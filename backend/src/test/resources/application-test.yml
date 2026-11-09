@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/servicebay_test}
+    username: ${TEST_DB_USER:postgres}
+    password: ${TEST_DB_PASSWORD:postgres}
+app:
+  auth:
+    dev-mode: true
+  storage:
+    type: local
+    local-dir: target/test-uploads
+  jobs:
+    enabled: false

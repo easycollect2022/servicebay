@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: servicebay-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:servicebay}}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 7MB
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${PORT:8080}
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
+  error:
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  seed-demo-data: ${SEED_DEMO_DATA:false}
+  zone: ${APP_ZONE:Asia/Kolkata}
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+  auth:
+    # Accepts "Bearer dev:<uid>:<phone>:<name>" tokens. Keep false in production.
+    dev-mode: ${AUTH_DEV_MODE:false}
+  firebase:
+    credentials-path: ${FIREBASE_CREDENTIALS:}
+    project-id: ${FIREBASE_PROJECT_ID:}
+    storage-bucket: ${FIREBASE_STORAGE_BUCKET:}
+  storage:
+    type: ${STORAGE_TYPE:local}     # local | db | firebase
+    local-dir: ${STORAGE_LOCAL_DIR:./uploads}
+    max-bytes: 5242880
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+  booking:
+    lead-minutes: 30          # earliest bookable slot is now + 30 min
+    days-ahead: 7             # customers can book up to 7 days ahead
+    max-otp-attempts: 5
+    reminder-minutes: 60      # reminder push ~1 hour before the slot

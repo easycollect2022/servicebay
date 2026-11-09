@@ -1,0 +1,63 @@
+# Render Blueprint: Dashboard > New > Blueprint > pick this repo.
+# Creates the app (PWA + API in one Docker web service) and a PostgreSQL database, both on the free plan.
+services:
+  - type: web
+    name: servicebay
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_HOST
+        fromDatabase: { name: servicebay-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: servicebay-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: servicebay-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: servicebay-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: servicebay-db, property: password }
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: TOMCAT_MAX_THREADS
+        value: "40"
+      - key: APP_ZONE
+        value: Asia/Kolkata
+      - key: STORAGE_TYPE
+        value: db                 # photos stored in PostgreSQL (free plan has no persistent disk)
+      - key: PUBLIC_BASE_URL
+        value: ""                 # image links are relative to the app
+      - key: SEED_DEMO_DATA
+        value: "true"             # two sample shops in pincode 560034
+      # --- TESTING ONLY: login without SMS. Anyone with the link can sign in as any number. ---
+      - key: AUTH_DEV_MODE
+        value: "true"
+      - key: VITE_DEV_AUTH
+        value: "true"
+      # --- For real OTP login + push: set these, then turn the two dev flags above to "false" ---
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CREDENTIALS
+        value: /etc/secrets/firebase-service-account.json   # upload as a Render "Secret File"
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_FIREBASE_VAPID_KEY
+        sync: false
+
+databases:
+  - name: servicebay-db
+    plan: free
+    region: singapore
+    databaseName: servicebay
+    user: servicebay
