@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dateStrip, isValidMobile, isValidPincode, rupees, slotGroup, slotLabel, time12 } from '../format'
+import { dateStrip, duration, isValidMobile, isValidPincode, rupees, slotGroup, slotLabel, time12 } from '../format'
 
 describe('format helpers', () => {
   it('builds a date strip and marks closed days', () => {
@@ -41,5 +41,11 @@ describe('format helpers', () => {
   it('formats rupees', () => {
     expect(rupees(1199)).toBe('₹1,199')
     expect(rupees(149.5)).toBe('₹149.5')
+  })
+
+  it('formats durations', () => {
+    expect(duration(50)).toBe('50 min')
+    expect(duration(90)).toBe('1 h 30 min')
+    expect(duration(180)).toBe('3 h')
   })
 })

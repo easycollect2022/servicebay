@@ -217,6 +217,57 @@ class BookingFlowTest {
     }
 
     @Test
+    void bookSeveralServicesAtOnce() throws Exception {
+        call(post("/api/me/role"), MERCHANT, "{\"role\":\"MERCHANT\"}");
+        call(post("/api/me/role"), CUSTOMER, "{\"role\":\"CUSTOMER\",\"name\":\"Rahul Sharma\"}");
+        call(put("/api/merchant/profile"), MERCHANT, """
+                {"shopName":"Speed Auto Care","phone":"9000012345","address":"Koramangala","pincode":"560034",
+                 "servesBike":true,"servesCar":true,"openDays":["TUESDAY"],"openTime":"09:00","closeTime":"20:00"}""");
+        long wash = body(call(post("/api/merchant/services"), MERCHANT,
+                "{\"category\":\"WATER_WASH\",\"vehicleType\":\"BIKE\",\"name\":\"Water wash\",\"price\":149,\"durationMin\":30}")).get("id").asLong();
+        long oil = body(call(post("/api/merchant/services"), MERCHANT,
+                "{\"category\":\"OIL_CHANGE\",\"vehicleType\":\"BIKE\",\"name\":\"Oil change\",\"price\":449,\"durationMin\":20}")).get("id").asLong();
+        long carWash = body(call(post("/api/merchant/services"), MERCHANT,
+                "{\"category\":\"WATER_WASH\",\"vehicleType\":\"CAR\",\"name\":\"Car wash\",\"price\":399,\"durationMin\":45}")).get("id").asLong();
+        long shopId = jdbc.queryForObject("select id from merchant", Long.class);
+
+        // slots for wash + oil need 50 minutes: the last start is 19:00 (ends 19:50)
+        call(get("/api/merchants/" + shopId + "/slots?date=2026-11-10&serviceIds=" + wash + "," + oil), CUSTOMER, null)
+                .andExpect(jsonPath("$.slots[-1:].time").value("19:00:00"));
+
+        String req = """
+                {"merchantId":%d,"serviceIds":[%d,%d],"date":"2026-11-10","time":"16:30",
+                 "address":"Flat 1","pincode":"560034","phone":"9876543210"}""".formatted(shopId, wash, oil);
+        call(post("/api/bookings"), CUSTOMER, req)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.serviceName").value("Water wash + Oil change"))
+                .andExpect(jsonPath("$.price").value(598))
+                .andExpect(jsonPath("$.durationMin").value(50))
+                .andExpect(jsonPath("$.slotEnd").value("2026-11-10T17:20:00"))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[1].name").value("Oil change"));
+
+        // 16:30–17:20 is busy: 17:00 overlaps, 17:30 is free
+        call(get("/api/merchants/" + shopId + "/slots?date=2026-11-10&serviceIds=" + wash), CUSTOMER2, null)
+                .andExpect(jsonPath("$.slots[?(@.time=='17:00:00')].available").value(false))
+                .andExpect(jsonPath("$.slots[?(@.time=='17:30:00')].available").value(true));
+        call(post("/api/me/role"), CUSTOMER2, "{\"role\":\"CUSTOMER\"}");
+        call(post("/api/bookings"), CUSTOMER2, """
+                {"merchantId":%d,"serviceIds":[%d],"date":"2026-11-10","time":"17:00",
+                 "address":"Flat 2","pincode":"560034","phone":"9811111111"}""".formatted(shopId, wash))
+                .andExpect(status().isConflict());
+
+        // bike and car services cannot be mixed in one booking
+        call(post("/api/bookings"), CUSTOMER2, req.replace("[" + wash + "," + oil + "]", "[" + wash + "," + carWash + "]").replace("16:30", "18:00"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MIXED_VEHICLES"));
+
+        // merchant sees both services
+        call(get("/api/merchant/bookings?scope=pending"), MERCHANT, null)
+                .andExpect(jsonPath("$[0].items.length()").value(2))
+                .andExpect(jsonPath("$[0].price").value(598));
+    }
+
+    @Test
     void otpLocksAfterFiveWrongAttempts() throws Exception {
         long[] ids = setUpAcceptedBooking();
         for (int i = 0; i < 5; i++) {

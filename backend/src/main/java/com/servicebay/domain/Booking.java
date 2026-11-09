@@ -7,6 +7,8 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "booking")
@@ -44,6 +46,16 @@ public class Booking {
 
     @Column(name = "slot_start", nullable = false)
     private LocalDateTime slotStart;
+
+    @Column(name = "slot_end", nullable = false)
+    private LocalDateTime slotEnd;
+
+    @Column(name = "duration_min", nullable = false)
+    private int durationMin;
+
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<BookingItem> items = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.nio.charset.StandardCharsets;
@@ -34,18 +35,20 @@ public class BookingService {
     private final AppUserRepository users;
     private final ReviewRepository reviews;
     private final NotificationService notifications;
+    private final CatalogService catalog;
     private final Clock clock;
     private final AppProperties props;
 
     public BookingService(BookingRepository bookings, MerchantRepository merchants, ServiceOfferingRepository services,
                           AppUserRepository users, ReviewRepository reviews, NotificationService notifications,
-                          Clock clock, AppProperties props) {
+                          CatalogService catalog, Clock clock, AppProperties props) {
         this.bookings = bookings;
         this.merchants = merchants;
         this.services = services;
         this.users = users;
         this.reviews = reviews;
         this.notifications = notifications;
+        this.catalog = catalog;
         this.clock = clock;
         this.props = props;
     }
@@ -54,21 +57,23 @@ public class BookingService {
 
     @Transactional
     public CustomerBookingView create(CurrentUser me, CreateBookingRequest r) {
-        Merchant m = merchants.findById(r.merchantId()).filter(Merchant::isOnboarded)
+        // Lock the shop row: concurrent bookings for the same shop are checked one at a time.
+        Merchant m = merchants.findByIdForUpdate(r.merchantId()).filter(Merchant::isOnboarded)
                 .orElseThrow(() -> ApiException.notFound("Shop"));
         if (!m.isOnline()) throw ApiException.conflict("SHOP_OFFLINE", "This shop is not taking bookings right now");
-        ServiceOffering s = services.findById(r.serviceId())
-                .filter(x -> x.getMerchant().getId().equals(m.getId()) && x.isActive())
-                .orElseThrow(() -> ApiException.notFound("Service"));
+        List<ServiceOffering> chosen = catalog.resolveServices(m, r.allServiceIds());
+        int duration = chosen.stream().mapToInt(ServiceOffering::getDurationMin).sum();
+        BigDecimal total = chosen.stream().map(ServiceOffering::getPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
+        String names = String.join(" + ", chosen.stream().map(ServiceOffering::getName).toList());
 
         LocalDateTime start = r.date().atTime(r.time());
         LocalDateTime now = LocalDateTime.now(clock);
         if (start.toLocalDate().isAfter(now.toLocalDate().plusDays(props.booking().daysAhead()))) {
             throw ApiException.badRequest("DATE_OUT_OF_RANGE", "Pick a date within the next " + props.booking().daysAhead() + " days");
         }
-        Set<LocalDateTime> taken = new HashSet<>(bookings.findTakenSlots(m.getId(), start.toLocalDate().atStartOfDay(),
-                start.toLocalDate().plusDays(1).atStartOfDay(), BookingStatus.ACTIVE));
-        if (!SlotCalculator.isBookable(OpeningHours.of(m), start, s.getDurationMin(), now, taken, props.booking().leadMinutes())) {
+        List<TimeRange> busy = bookings.findBusy(m.getId(), start.toLocalDate().atStartOfDay(),
+                start.toLocalDate().plusDays(1).atStartOfDay(), BookingStatus.ACTIVE);
+        if (!SlotCalculator.isBookable(OpeningHours.of(m), start, duration, now, busy, props.booking().leadMinutes())) {
             throw ApiException.conflict("SLOT_UNAVAILABLE", "That time slot is no longer available. Please pick another.");
         }
 
@@ -77,17 +82,28 @@ public class BookingService {
         b.setCode(newCode());
         b.setCustomer(customer);
         b.setMerchant(m);
-        b.setService(s);
-        b.setServiceName(s.getName());
-        b.setVehicleType(s.getVehicleType());
-        b.setPrice(s.getPrice());
+        b.setService(chosen.get(0));
+        b.setServiceName(names.length() > 500 ? names.substring(0, 497) + "..." : names);
+        b.setVehicleType(chosen.get(0).getVehicleType());
+        b.setPrice(total);
+        b.setDurationMin(duration);
         b.setSlotStart(start);
+        b.setSlotEnd(start.plusMinutes(duration));
         b.setStatus(BookingStatus.REQUESTED);
         b.setOtp(newOtp());
         b.setCustomerName(me.name());
         b.setCustomerPhone(r.phone().trim());
         b.setCustomerAddress(r.address().trim());
         b.setCustomerPincode(r.pincode());
+        for (ServiceOffering s : chosen) {
+            BookingItem item = new BookingItem();
+            item.setBooking(b);
+            item.setService(s);
+            item.setServiceName(s.getName());
+            item.setPrice(s.getPrice());
+            item.setDurationMin(s.getDurationMin());
+            b.getItems().add(item);
+        }
         try {
             bookings.saveAndFlush(b);
         } catch (DataIntegrityViolationException e) {
@@ -102,7 +118,7 @@ public class BookingService {
         if (cu.getPhone() == null) cu.setPhone(b.getCustomerPhone());
 
         notifications.notify(m.getUser(), "BOOKING_REQUESTED", "New booking request",
-                s.getName() + " · " + label(s.getVehicleType()) + " · " + WHEN.format(start) + " · ₹" + s.getPrice().stripTrailingZeros().toPlainString(),
+                names + " · " + label(b.getVehicleType()) + " · " + WHEN.format(start) + " · ₹" + total.stripTrailingZeros().toPlainString(),
                 b.getId(), "/merchant/orders/" + b.getId());
         return Mappers.customerBooking(b, null);
     }

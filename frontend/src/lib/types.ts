@@ -27,14 +27,15 @@ export interface MerchantSummary {
 export interface MerchantDetail { shop: MerchantProfile; services: ServiceItem[]; openNow: boolean; distanceKm?: number }
 export interface Slot { time: string; available: boolean }
 export interface SlotsResponse { date: string; open: boolean; slots: Slot[] }
+export interface BookingItem { serviceId: number; name: string; price: number; durationMin: number }
 export interface CustomerBooking {
   id: number; code: string; merchantId: number; shopName: string; shopPhone?: string; shopAddress?: string
-  shopLatitude?: number; shopLongitude?: number; serviceName: string; vehicleType: VehicleType; price: number
-  slotStart: string; status: BookingStatus; otp?: string; myRating?: number; createdAt: string
+  shopLatitude?: number; shopLongitude?: number; serviceName: string; items: BookingItem[]; vehicleType: VehicleType; price: number
+  durationMin: number; slotStart: string; slotEnd: string; status: BookingStatus; otp?: string; myRating?: number; createdAt: string
 }
 export interface MerchantBooking {
-  id: number; code: string; serviceName: string; vehicleType: VehicleType; price: number; slotStart: string
-  status: BookingStatus; customerName?: string; customerPincode: string; customerPhone?: string
+  id: number; code: string; serviceName: string; items: BookingItem[]; vehicleType: VehicleType; price: number
+  durationMin: number; slotStart: string; slotEnd: string; status: BookingStatus; customerName?: string; customerPincode: string; customerPhone?: string
   customerAddress?: string; createdAt: string
 }
 export interface Review {

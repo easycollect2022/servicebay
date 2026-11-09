@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /** Pure slot logic: no Spring, no database, so it is fully unit-testable. */
 public final class SlotCalculator {
@@ -24,18 +23,20 @@ public final class SlotCalculator {
 
     /**
      * Slots start every slotMinutes from opening time; a slot is offered only if the whole service
-     * (durationMin) fits before closing. A slot is unavailable when already taken or when it starts
-     * less than leadMinutes from now.
+     * (durationMin) fits before closing. A slot is unavailable when the time it needs overlaps an existing
+     * booking, or when it starts less than leadMinutes from now.
      */
     public static List<SlotView> slots(OpeningHours h, LocalDate date, int durationMin, LocalDateTime now,
-                                       Set<LocalDateTime> taken, int leadMinutes) {
+                                       List<TimeRange> busy, int leadMinutes) {
         List<SlotView> out = new ArrayList<>();
         if (!isOpenOn(h, date) || !h.open().isBefore(h.close()) || h.slotMinutes() <= 0) return out;
         LocalDateTime earliest = now.plusMinutes(leadMinutes);
         LocalDateTime start = date.atTime(h.open());
         LocalDateTime close = date.atTime(h.close());
         while (!start.plusMinutes(durationMin).isAfter(close)) {
-            boolean available = !start.isBefore(earliest) && !taken.contains(start);
+            LocalDateTime end = start.plusMinutes(durationMin);
+            LocalDateTime s0 = start;
+            boolean available = !start.isBefore(earliest) && busy.stream().noneMatch(b -> b.overlaps(s0, end));
             out.add(new SlotView(start.toLocalTime(), available));
             start = start.plusMinutes(h.slotMinutes());
         }
@@ -44,8 +45,8 @@ public final class SlotCalculator {
 
     /** True when the requested start is one of the offered, available slots. */
     public static boolean isBookable(OpeningHours h, LocalDateTime start, int durationMin, LocalDateTime now,
-                                     Set<LocalDateTime> taken, int leadMinutes) {
-        return slots(h, start.toLocalDate(), durationMin, now, taken, leadMinutes).stream()
+                                     List<TimeRange> busy, int leadMinutes) {
+        return slots(h, start.toLocalDate(), durationMin, now, busy, leadMinutes).stream()
                 .anyMatch(s -> s.available() && s.time().equals(start.toLocalTime()));
     }
 

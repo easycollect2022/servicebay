@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, errMsg } from '../../lib/api'
-import { DAYS, rupees, time12, timeAgo } from '../../lib/format'
+import { DAYS, duration, rupees, time12, timeAgo } from '../../lib/format'
 import type { MerchantDetail, ReviewSummary, VehicleType } from '../../lib/types'
 import { ErrorBox, Page, Spinner, Stars } from '../../components/ui'
 import { Icon } from '../../components/Icon'
@@ -14,7 +14,7 @@ export default function Shop() {
   const [reviews, setReviews] = useState<ReviewSummary | null>(null)
   const [tab, setTab] = useState<'services' | 'reviews' | 'about'>('services')
   const [vehicle, setVehicle] = useState<VehicleType>((params.get('vehicle') as VehicleType) || 'BIKE')
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number[]>([])
   const [photo, setPhoto] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,7 +31,10 @@ export default function Shop() {
   if (!data) return <Page><Spinner /></Page>
   const { shop } = data
   const services = data.services.filter((s) => s.vehicleType === vehicle)
-  const chosen = services.find((s) => s.id === selected)
+  const chosen = services.filter((s) => selected.includes(s.id))
+  const total = chosen.reduce((a, s) => a + Number(s.price), 0)
+  const totalMin = chosen.reduce((a, s) => a + s.durationMin, 0)
+  const toggle = (id: number) => setSelected((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]))
   const mapUrl = shop.latitude != null
     ? `https://www.google.com/maps/dir/?api=1&destination=${shop.latitude},${shop.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${shop.address} ${shop.pincode}`)}`
@@ -79,16 +82,17 @@ export default function Shop() {
             {shop.servesBike && shop.servesCar && (
               <div className="flex gap-2">
                 {(['BIKE', 'CAR'] as VehicleType[]).map((v) => (
-                  <button key={v} className={`chip ${vehicle === v ? 'chip-on' : ''}`} onClick={() => { setVehicle(v); setSelected(null) }}>{v === 'BIKE' ? 'Bike' : 'Car'}</button>
+                  <button key={v} className={`chip ${vehicle === v ? 'chip-on' : ''}`} onClick={() => { setVehicle(v); setSelected([]) }}>{v === 'BIKE' ? 'Bike' : 'Car'}</button>
                 ))}
               </div>
             )}
+            {services.length > 0 && <p className="text-[13px] text-muted">Select one or more services — they are done one after another in a single visit.</p>}
             {services.length === 0 ? <p className="text-muted">No {vehicle === 'BIKE' ? 'bike' : 'car'} services listed yet.</p> : (
               <fieldset className="card overflow-hidden">
-                <legend className="sr-only">Choose a service</legend>
+                <legend className="sr-only">Choose one or more services</legend>
                 {services.map((s, i) => (
-                  <label key={s.id} className={`flex cursor-pointer items-start gap-3 p-3.5 ${i ? 'border-t border-line' : ''} ${selected === s.id ? 'bg-[#1A2A24]' : ''}`}>
-                    <input type="radio" name="svc" className="mt-1 h-5 w-5 accent-[#3DDC97]" checked={selected === s.id} onChange={() => setSelected(s.id)} />
+                  <label key={s.id} className={`flex cursor-pointer items-start gap-3 p-3.5 ${i ? 'border-t border-line' : ''} ${selected.includes(s.id) ? 'bg-[#1A2A24]' : ''}`}>
+                    <input type="checkbox" className="mt-1 h-5 w-5 accent-[#3DDC97]" checked={selected.includes(s.id)} onChange={() => toggle(s.id)} />
                     {s.imageUrl && <img src={s.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />}
                     <span className="flex flex-1 flex-col gap-0.5">
                       <span className="flex justify-between gap-2"><strong>{s.name}</strong><strong>{rupees(s.price)}</strong></span>
@@ -128,9 +132,12 @@ export default function Shop() {
 
       <div className="fixed inset-x-0 bottom-0 border-t border-line bg-[#11151C] pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto flex max-w-md items-center gap-3.5 px-5 py-3.5">
-          <div className="flex flex-col"><span className="text-xs text-muted">{chosen ? chosen.name : 'Select a service'}</span><strong className="text-lg">{chosen ? rupees(chosen.price) : '—'}</strong></div>
-          {chosen
-            ? <Link to={`/book/${shop.id}/${chosen.id}`} className="btn-primary flex-1">Choose date &amp; time</Link>
+          <div className="flex flex-col">
+            <span className="text-xs text-muted">{chosen.length ? `${chosen.length} service${chosen.length > 1 ? 's' : ''} · ${duration(totalMin)}` : 'Select services'}</span>
+            <strong className="text-lg">{chosen.length ? rupees(total) : '—'}</strong>
+          </div>
+          {chosen.length
+            ? <Link to={`/book/${shop.id}?services=${chosen.map((c) => c.id).join(',')}`} className="btn-primary flex-1">Choose date &amp; time</Link>
             : <button className="btn-primary flex-1" disabled>Choose date &amp; time</button>}
         </div>
       </div>

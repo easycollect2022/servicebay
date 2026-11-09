@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errMsg } from '../../lib/api'
-import { slotLabel, vehicleLabel } from '../../lib/format'
+import { duration, rupees, slotLabel, time12, vehicleLabel } from '../../lib/format'
 import type { CustomerBooking } from '../../lib/types'
 import { CustomerNav, Empty, ErrorBox, Page, Spinner, StatusPill, useToast } from '../../components/ui'
 import { Icon } from '../../components/Icon'
@@ -65,10 +65,14 @@ function BookingCard({ b, onChange }: { b: CustomerBooking; onChange: () => void
 
   return (
     <div className="card flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between gap-2"><strong>{b.serviceName} · {vehicleLabel(b.vehicleType)}</strong><StatusPill status={b.status} /></div>
+      <div className="flex items-center justify-between gap-2"><strong>{b.shopName} · {vehicleLabel(b.vehicleType)}</strong><StatusPill status={b.status} /></div>
       <div className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted">{b.shopName} · {b.code}</span>
-        <span className="flex items-center gap-2"><Icon name="calendar" size={16} className="text-mint" />{slotLabel(b.slotStart)}</span>
+        <span className="flex items-center gap-2"><Icon name="calendar" size={16} className="text-mint" />{slotLabel(b.slotStart)} – {time12(b.slotEnd.split('T')[1])}</span>
+        <ul className="flex flex-col gap-1 rounded-xl bg-surface2 px-3 py-2.5">
+          {b.items.map((i) => <li key={i.serviceId} className="flex justify-between"><span>{i.name}</span><span className="text-muted">{rupees(i.price)}</span></li>)}
+          <li className="flex justify-between border-t border-line pt-1.5 font-semibold"><span>Total · {duration(b.durationMin)}</span><span>{rupees(b.price)}</span></li>
+        </ul>
+        <span className="text-xs text-muted">Booking {b.code} · pay at shop</span>
       </div>
 
       {stepIdx >= 0 && stepIdx < 3 && (

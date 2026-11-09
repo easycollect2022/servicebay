@@ -93,3 +93,10 @@ export const STATUS: Record<BookingStatus, { label: string; cls: string }> = {
 
 export const isValidPincode = (p: string) => /^[1-9][0-9]{5}$/.test(p)
 export const isValidMobile = (p: string) => /^[6-9][0-9]{9}$/.test(p.replace(/\s/g, ''))
+
+/** 50 -> "50 min", 90 -> "1 h 30 min", 180 -> "3 h" */
+export function duration(min: number): string {
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60), m = min % 60
+  return m ? `${h} h ${m} min` : `${h} h`
+}

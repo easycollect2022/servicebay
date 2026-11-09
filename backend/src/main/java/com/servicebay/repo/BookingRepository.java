@@ -20,14 +20,15 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByMerchantIdOrderBySlotStartDesc(Long merchantId);
 
+    /** Active bookings that overlap [from, to). */
     @Query("""
-            select b.slotStart from Booking b
+            select new com.servicebay.service.TimeRange(b.slotStart, b.slotEnd) from Booking b
             where b.merchant.id = :merchantId
-              and b.slotStart >= :from and b.slotStart < :to
+              and b.slotStart < :to and b.slotEnd > :from
               and b.status in :statuses
             """)
-    List<LocalDateTime> findTakenSlots(Long merchantId, LocalDateTime from, LocalDateTime to,
-                                       Collection<BookingStatus> statuses);
+    List<com.servicebay.service.TimeRange> findBusy(Long merchantId, LocalDateTime from, LocalDateTime to,
+                                                    Collection<BookingStatus> statuses);
 
     /** SKIP LOCKED so several API instances never send the same reminder twice. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

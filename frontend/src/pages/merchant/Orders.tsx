@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, errMsg } from '../../lib/api'
-import { rupees, slotLabel, vehicleLabel } from '../../lib/format'
+import { duration, rupees, slotLabel, vehicleLabel } from '../../lib/format'
 import type { MerchantBooking, MerchantProfile, NotificationList } from '../../lib/types'
 import { Empty, ErrorBox, MerchantNav, Page, Spinner, StatusPill } from '../../components/ui'
 import { Icon } from '../../components/Icon'
@@ -70,7 +70,7 @@ export default function Orders() {
             <div key={b.id} className="card flex flex-col gap-2.5 p-3.5">
               <Link to={`/merchant/orders/${b.id}`} className="flex flex-col gap-2.5">
                 <div className="flex justify-between gap-2"><strong>{b.serviceName} · {vehicleLabel(b.vehicleType)}</strong><strong>{rupees(b.price)}</strong></div>
-                <span className="flex items-center gap-2 text-sm"><Icon name="calendar" size={16} className="text-mint" />{slotLabel(b.slotStart)}</span>
+                <span className="flex items-center gap-2 text-sm"><Icon name="calendar" size={16} className="text-mint" />{slotLabel(b.slotStart)} · {duration(b.durationMin)}</span>
                 <span className="flex items-center justify-between text-[13px] text-muted">
                   <span>{b.customerName ?? 'Customer'} · {b.customerPincode}</span>
                   {scope !== 'pending' && <StatusPill status={b.status} />}

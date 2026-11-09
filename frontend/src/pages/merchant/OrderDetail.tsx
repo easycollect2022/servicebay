@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, errMsg } from '../../lib/api'
-import { rupees, slotLabel, vehicleLabel } from '../../lib/format'
+import { duration, rupees, slotLabel, time12, vehicleLabel } from '../../lib/format'
 import type { MerchantBooking } from '../../lib/types'
 import { ErrorBox, Header, Page, Spinner, StatusPill, useToast } from '../../components/ui'
 import { Icon } from '../../components/Icon'
@@ -54,7 +54,7 @@ export default function OrderDetail() {
 
         <div className="flex items-center gap-3 rounded-2xl border border-[#2A6B50] bg-mint-soft p-4">
           <Icon name="calendar" size={28} className="text-mint" />
-          <div><span className="block text-xs text-[#9FE6C4]">Scheduled slot</span><strong className="font-display text-lg">{slotLabel(b.slotStart)}</strong></div>
+          <div><span className="block text-xs text-[#9FE6C4]">Scheduled slot</span><strong className="font-display text-lg">{slotLabel(b.slotStart)} – {time12(b.slotEnd.split('T')[1])}</strong></div>
         </div>
 
         <h2 className="section">Customer</h2>
@@ -75,9 +75,11 @@ export default function OrderDetail() {
 
         <h2 className="section">Service</h2>
         <div className="card flex flex-col gap-2.5 p-4 text-sm">
-          <div className="flex justify-between"><span className="text-muted">Service</span><strong>{b.serviceName}</strong></div>
           <div className="flex justify-between"><span className="text-muted">Vehicle</span><strong>{vehicleLabel(b.vehicleType)}</strong></div>
-          <div className="flex justify-between"><span className="text-muted">Amount · pay at shop</span><strong>{rupees(b.price)}</strong></div>
+          {b.items.map((i) => (
+            <div key={i.serviceId} className="flex justify-between"><span>{i.name} <span className="text-muted">· {duration(i.durationMin)}</span></span><span>{rupees(i.price)}</span></div>
+          ))}
+          <div className="flex justify-between border-t border-line pt-2.5"><span className="text-muted">Total · {duration(b.durationMin)} · pay at shop</span><strong>{rupees(b.price)}</strong></div>
         </div>
 
         {b.status === 'ACCEPTED' && (

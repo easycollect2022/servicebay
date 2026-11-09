@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.time.*;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
+
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,13 +19,13 @@ class SlotCalculatorTest {
 
     @Test
     void closedDayHasNoSlots() {
-        assertThat(SlotCalculator.slots(hours, LocalDate.of(2026, 11, 15), 30, mondayMorning, Set.of(), 30)).isEmpty();
+        assertThat(SlotCalculator.slots(hours, LocalDate.of(2026, 11, 15), 30, mondayMorning, List.of(), 30)).isEmpty();
         assertThat(SlotCalculator.isOpenOn(hours, LocalDate.of(2026, 11, 15))).isFalse();
     }
 
     @Test
     void slotsRunFromOpeningUntilServiceFitsBeforeClosing() {
-        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, mondayMorning, Set.of(), 30);
+        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, mondayMorning, List.of(), 30);
         assertThat(s).hasSize(22);
         assertThat(s.getFirst().time()).isEqualTo(LocalTime.of(9, 0));
         assertThat(s.getLast().time()).isEqualTo(LocalTime.of(19, 30));
@@ -34,31 +34,50 @@ class SlotCalculatorTest {
 
     @Test
     void longServiceMustFinishBeforeClosing() {
-        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 180, mondayMorning, Set.of(), 30);
+        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 180, mondayMorning, List.of(), 30);
         assertThat(s.getLast().time()).isEqualTo(LocalTime.of(17, 0));
     }
 
     @Test
     void takenSlotIsUnavailable() {
         LocalDateTime taken = tuesday.atTime(16, 30);
-        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, mondayMorning, Set.of(taken), 30);
+        List<TimeRange> busy = List.of(new TimeRange(taken, taken.plusMinutes(30)));
+        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, mondayMorning, busy, 30);
         assertThat(s).filteredOn(x -> x.time().equals(LocalTime.of(16, 30))).singleElement()
                 .extracting(SlotView::available).isEqualTo(false);
-        assertThat(SlotCalculator.isBookable(hours, taken, 30, mondayMorning, Set.of(taken), 30)).isFalse();
+        assertThat(SlotCalculator.isBookable(hours, taken, 30, mondayMorning, busy, 30)).isFalse();
+    }
+
+    @Test
+    void longBookingBlocksEveryOverlappingSlot() {
+        // existing 3-hour full service 09:00–12:00
+        List<TimeRange> busy = List.of(new TimeRange(tuesday.atTime(9, 0), tuesday.atTime(12, 0)));
+        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, mondayMorning, busy, 30);
+        assertThat(s).filteredOn(x -> x.time().isBefore(LocalTime.of(12, 0))).noneMatch(SlotView::available);
+        assertThat(s).filteredOn(x -> x.time().equals(LocalTime.of(12, 0))).allMatch(SlotView::available);
+    }
+
+    @Test
+    void newBookingMustNotRunIntoALaterOne() {
+        // existing booking 11:00–11:30; a 50-min job at 10:30 would overlap, at 10:00 it ends 10:50 and fits
+        List<TimeRange> busy = List.of(new TimeRange(tuesday.atTime(11, 0), tuesday.atTime(11, 30)));
+        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(10, 30), 50, mondayMorning, busy, 30)).isFalse();
+        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(10, 0), 50, mondayMorning, busy, 30)).isTrue();
+        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(11, 30), 50, mondayMorning, busy, 30)).isTrue();
     }
 
     @Test
     void slotsInsideLeadTimeAreUnavailable() {
         LocalDateTime now = LocalDateTime.of(2026, 11, 10, 12, 10);
-        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, now, Set.of(), 30);
+        List<SlotView> s = SlotCalculator.slots(hours, tuesday, 30, now, List.of(), 30);
         assertThat(s).filteredOn(SlotView::available).first().extracting(SlotView::time).isEqualTo(LocalTime.of(13, 0));
-        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(12, 30), 30, now, Set.of(), 30)).isFalse();
+        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(12, 30), 30, now, List.of(), 30)).isFalse();
     }
 
     @Test
     void offGridTimeIsNotBookable() {
-        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(10, 15), 30, mondayMorning, Set.of(), 30)).isFalse();
-        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(10, 30), 30, mondayMorning, Set.of(), 30)).isTrue();
+        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(10, 15), 30, mondayMorning, List.of(), 30)).isFalse();
+        assertThat(SlotCalculator.isBookable(hours, tuesday.atTime(10, 30), 30, mondayMorning, List.of(), 30)).isTrue();
     }
 
     @Test

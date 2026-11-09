@@ -46,8 +46,10 @@ public class CatalogController {
     @GetMapping("/{id}/slots")
     public SlotsResponse slots(@PathVariable Long id,
                                @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-                               @RequestParam(required = false) Long serviceId) {
-        return catalog.slots(id, serviceId, date);
+                               @RequestParam(required = false) Long serviceId,
+                               @RequestParam(required = false) List<Long> serviceIds) {
+        List<Long> ids = serviceIds != null ? serviceIds : serviceId != null ? List.of(serviceId) : List.of();
+        return catalog.slots(id, ids, date);
     }
 
     @GetMapping("/{id}/reviews")

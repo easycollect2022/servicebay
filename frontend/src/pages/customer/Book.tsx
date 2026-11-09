@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, errMsg } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { dateStrip, isValidMobile, isValidPincode, rupees, slotGroup, time12, vehicleLabel, type SlotGroup } from '../../lib/format'
+import { dateStrip, duration, isValidMobile, isValidPincode, rupees, slotGroup, time12, vehicleLabel, type SlotGroup } from '../../lib/format'
 import type { CustomerBooking, MerchantDetail, SlotsResponse } from '../../lib/types'
 import { ErrorBox, Header, Page, Spinner, useToast } from '../../components/ui'
 import { Icon } from '../../components/Icon'
@@ -11,6 +11,9 @@ const DAYS_AHEAD = 7
 
 export default function Book() {
   const { shopId, serviceId } = useParams()
+  const [params] = useSearchParams()
+  const serviceIds = useMemo(() => (params.get('services') ?? serviceId ?? '').split(',').filter(Boolean).map(Number), [params, serviceId])
+  const idsParam = serviceIds.join(',')
   const { me } = useAuth()
   const nav = useNavigate()
   const toast = useToast()
@@ -32,10 +35,12 @@ export default function Book() {
   useEffect(() => {
     if (!date) return
     setSlots(null); setTime(null)
-    api<SlotsResponse>(`/api/merchants/${shopId}/slots?date=${date}&serviceId=${serviceId}`).then(setSlots).catch((e) => setError(errMsg(e)))
-  }, [date, shopId, serviceId])
+    api<SlotsResponse>(`/api/merchants/${shopId}/slots?date=${date}&serviceIds=${idsParam}`).then(setSlots).catch((e) => setError(errMsg(e)))
+  }, [date, shopId, idsParam])
 
-  const service = shop?.services.find((s) => String(s.id) === serviceId)
+  const chosen = (shop?.services ?? []).filter((s) => serviceIds.includes(s.id))
+  const total = chosen.reduce((a, s) => a + Number(s.price), 0)
+  const totalMin = chosen.reduce((a, s) => a + s.durationMin, 0)
   const groups = useMemo(() => {
     const g: Record<SlotGroup, NonNullable<typeof slots>['slots']> = { Morning: [], Afternoon: [], Evening: [] }
     slots?.slots.forEach((s) => g[slotGroup(s.time)].push(s))
@@ -50,20 +55,20 @@ export default function Book() {
     if (!isValidMobile(phone)) return setError('Enter a valid 10-digit mobile number')
     setBusy(true)
     try {
-      await api<CustomerBooking>('/api/bookings', { body: { merchantId: Number(shopId), serviceId: Number(serviceId), date, time, address: address.trim(), pincode, phone: '+91' + phone.replace(/\s/g, '') } })
+      await api<CustomerBooking>('/api/bookings', { body: { merchantId: Number(shopId), serviceIds, date, time, address: address.trim(), pincode, phone: '+91' + phone.replace(/\s/g, '') } })
       toast('Booking requested', 'We will notify you when the shop accepts.')
       nav('/bookings', { replace: true })
     } catch (e) {
       setError(errMsg(e))
       if (e instanceof ApiError && e.code === 'SLOT_UNAVAILABLE' && date) {
-        api<SlotsResponse>(`/api/merchants/${shopId}/slots?date=${date}&serviceId=${serviceId}`).then(setSlots).catch(() => undefined)
+        api<SlotsResponse>(`/api/merchants/${shopId}/slots?date=${date}&serviceIds=${idsParam}`).then(setSlots).catch(() => undefined)
         setTime(null)
       }
     } finally { setBusy(false) }
   }
 
   if (!shop) return <Page>{error ? <ErrorBox msg={error} /> : <Spinner />}</Page>
-  if (!service) return <Page><ErrorBox msg="This service is no longer available." /></Page>
+  if (chosen.length === 0 || chosen.length !== serviceIds.length) return <Page><ErrorBox msg="One or more selected services are no longer available. Go back and choose again." /></Page>
   const chosenDay = days.find((d) => d.iso === date)
 
   return (
@@ -71,9 +76,14 @@ export default function Book() {
       <div className="px-5 pt-5">
         <Header title="Schedule booking" back />
         <div className="flex flex-col gap-5">
-          <div className="card flex items-center justify-between p-3.5">
-            <div><strong className="block">{service.name} · {vehicleLabel(service.vehicleType)}</strong><span className="text-[13px] text-muted">{shop.shop.shopName} · {service.durationMin} min</span></div>
-            <strong>{rupees(service.price)}</strong>
+          <div className="card flex flex-col gap-2 p-3.5">
+            <span className="text-[13px] text-muted">{shop.shop.shopName} · {vehicleLabel(chosen[0].vehicleType)}</span>
+            {chosen.map((s) => (
+              <div key={s.id} className="flex justify-between text-sm"><span>{s.name} <span className="text-muted">· {duration(s.durationMin)}</span></span><span>{rupees(s.price)}</span></div>
+            ))}
+            {chosen.length > 1 && (
+              <div className="flex justify-between border-t border-line pt-2"><strong>Total · {duration(totalMin)}</strong><strong>{rupees(total)}</strong></div>
+            )}
           </div>
 
           <section className="flex flex-col gap-3">
@@ -130,7 +140,7 @@ export default function Book() {
           <p className="flex items-center gap-2.5 text-sm"><Icon name="clock" size={18} className="text-mint" />
             <span><strong>{chosenDay && time ? `${chosenDay.dow === 'Today' ? 'Today' : chosenDay.dow}, ${chosenDay.day} ${chosenDay.month} · ${time12(time)}` : 'Pick a slot'}</strong><span className="text-muted"> · Pay at shop</span></span>
           </p>
-          <button className="btn-primary w-full" disabled={busy || !time} onClick={submit}>Request booking · {rupees(service.price)}</button>
+          <button className="btn-primary w-full" disabled={busy || !time} onClick={submit}>Request booking · {rupees(total)}</button>
         </div>
       </div>
     </div>

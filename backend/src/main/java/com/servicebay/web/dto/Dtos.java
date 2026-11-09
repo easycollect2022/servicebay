@@ -87,22 +87,33 @@ public final class Dtos {
     public record SlotsResponse(LocalDate date, boolean open, List<SlotView> slots) {}
 
     // ---------- bookings ----------
-    public record CreateBookingRequest(@NotNull Long merchantId, @NotNull Long serviceId,
+    /** serviceIds: one or more services done one after another (serviceId kept for older clients). */
+    public record CreateBookingRequest(@NotNull Long merchantId, Long serviceId,
+                                       @Size(max = 10) List<@NotNull Long> serviceIds,
                                        @NotNull LocalDate date, @NotNull LocalTime time,
                                        @NotBlank @Size(max = 500) String address,
                                        @NotBlank @Pattern(regexp = PINCODE) String pincode,
-                                       @NotBlank @Pattern(regexp = PHONE) String phone) {}
+                                       @NotBlank @Pattern(regexp = PHONE) String phone) {
+        public List<Long> allServiceIds() {
+            if (serviceIds != null && !serviceIds.isEmpty()) return serviceIds.stream().distinct().toList();
+            return serviceId == null ? List.of() : List.of(serviceId);
+        }
+    }
+
+    public record BookingItemView(Long serviceId, String name, BigDecimal price, int durationMin) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record CustomerBookingView(Long id, String code, Long merchantId, String shopName, String shopPhone,
                                       String shopAddress, Double shopLatitude, Double shopLongitude,
-                                      String serviceName, VehicleType vehicleType, BigDecimal price,
-                                      LocalDateTime slotStart, BookingStatus status, String otp,
+                                      String serviceName, List<BookingItemView> items, VehicleType vehicleType,
+                                      BigDecimal price, int durationMin, LocalDateTime slotStart,
+                                      LocalDateTime slotEnd, BookingStatus status, String otp,
                                       Integer myRating, Instant createdAt) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record MerchantBookingView(Long id, String code, String serviceName, VehicleType vehicleType,
-                                      BigDecimal price, LocalDateTime slotStart, BookingStatus status,
+    public record MerchantBookingView(Long id, String code, String serviceName, List<BookingItemView> items,
+                                      VehicleType vehicleType, BigDecimal price, int durationMin,
+                                      LocalDateTime slotStart, LocalDateTime slotEnd, BookingStatus status,
                                       String customerName, String customerPincode, String customerPhone,
                                       String customerAddress, Instant createdAt) {}
 

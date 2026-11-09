@@ -67,8 +67,12 @@ try {
   log('customer sees shop for pincode 560034')
 
   await c.getByRole('link', { name: /Speed Auto Care/ }).click()
-  await c.getByRole('radio', { name: /Water wash/ }).check()
+  await c.getByRole('checkbox', { name: /Water wash/ }).check()
+  await c.getByRole('checkbox', { name: /Oil change/ }).check()
+  await c.getByText('2 services · 50 min').waitFor()
+  await c.getByText('₹598').first().waitFor()
   await shot(c, 'customer-shop')
+  log('customer selected 2 services: total ₹598, 50 min')
   await c.getByRole('link', { name: 'Choose date & time' }).click()
   await c.getByRole('heading', { name: 'Schedule booking' }).waitFor()
   // choose tomorrow and the 4:30 PM slot
@@ -78,6 +82,7 @@ try {
   await shot(c, 'customer-schedule')
   await c.getByRole('button', { name: /Request booking/ }).click()
   await c.getByRole('heading', { name: 'My bookings' }).waitFor()
+  await c.getByText('Total · 50 min').waitFor()
   const otp = (await c.locator('strong.tracking-\\[6px\\]').first().innerText()).trim()
   if (!/^\d{4}$/.test(otp)) throw new Error('OTP not shown: ' + otp)
   await shot(c, 'customer-bookings-otp')
@@ -85,13 +90,14 @@ try {
 
   // ---------- merchant accepts and starts with OTP ----------
   await m.goto(WEB + '/merchant')
-  await m.getByText('Water wash · Bike').waitFor()
+  await m.getByText('Water wash + Oil change · Bike').waitFor()
   await m.getByText('Address & phone shown after you accept').waitFor()
   await shot(m, 'merchant-new-request')
   await m.getByRole('button', { name: 'Accept' }).first().click()
   await m.getByRole('tab', { name: 'upcoming' }).click()
   await m.getByRole('link', { name: /Water wash/ }).click()
   await m.getByText('Flat 302, Green Residency').waitFor()
+  await m.getByText('Total · 50 min · pay at shop').waitFor()
   log('merchant accepted; customer address now visible')
 
   for (let i = 0; i < 4; i++) await m.getByLabel(`OTP digit ${i + 1}`).fill(String((Number(otp[i]) + 1) % 10))

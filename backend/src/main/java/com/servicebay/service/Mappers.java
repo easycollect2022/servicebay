@@ -25,16 +25,23 @@ final class Mappers {
         Merchant m = b.getMerchant();
         String otp = BookingStatus.OTP_VISIBLE.contains(b.getStatus()) ? b.getOtp() : null;
         return new CustomerBookingView(b.getId(), b.getCode(), m.getId(), m.getShopName(), m.getPhone(),
-                m.getAddress(), m.getLatitude(), m.getLongitude(), b.getServiceName(), b.getVehicleType(),
-                b.getPrice(), b.getSlotStart(), b.getStatus(), otp, myRating, b.getCreatedAt());
+                m.getAddress(), m.getLatitude(), m.getLongitude(), b.getServiceName(), items(b), b.getVehicleType(),
+                b.getPrice(), b.getDurationMin(), b.getSlotStart(), b.getSlotEnd(), b.getStatus(), otp, myRating,
+                b.getCreatedAt());
     }
 
     /** Customer phone and address are withheld until the merchant accepts. The OTP is never included. */
     static MerchantBookingView merchantBooking(Booking b) {
         boolean visible = BookingStatus.CONTACT_VISIBLE.contains(b.getStatus());
-        return new MerchantBookingView(b.getId(), b.getCode(), b.getServiceName(), b.getVehicleType(), b.getPrice(),
-                b.getSlotStart(), b.getStatus(), b.getCustomerName(), b.getCustomerPincode(),
+        return new MerchantBookingView(b.getId(), b.getCode(), b.getServiceName(), items(b), b.getVehicleType(),
+                b.getPrice(), b.getDurationMin(), b.getSlotStart(), b.getSlotEnd(), b.getStatus(), b.getCustomerName(), b.getCustomerPincode(),
                 visible ? b.getCustomerPhone() : null, visible ? b.getCustomerAddress() : null, b.getCreatedAt());
+    }
+
+    static List<BookingItemView> items(Booking b) {
+        return b.getItems().stream()
+                .map(i -> new BookingItemView(i.getService().getId(), i.getServiceName(), i.getPrice(), i.getDurationMin()))
+                .toList();
     }
 
     static ReviewView review(Review r) {

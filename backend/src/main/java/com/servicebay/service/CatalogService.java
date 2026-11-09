@@ -81,7 +81,7 @@ public class CatalogService {
     }
 
     @Transactional(readOnly = true)
-    public SlotsResponse slots(Long merchantId, Long serviceId, LocalDate date) {
+    public SlotsResponse slots(Long merchantId, List<Long> serviceIds, LocalDate date) {
         Merchant m = publicShop(merchantId);
         LocalDate today = LocalDate.now(clock);
         if (date.isBefore(today) || date.isAfter(today.plusDays(props.booking().daysAhead()))) {
@@ -89,17 +89,29 @@ public class CatalogService {
                     "Pick a date within the next " + props.booking().daysAhead() + " days");
         }
         int duration = m.getSlotMinutes();
-        if (serviceId != null) {
-            ServiceOffering s = services.findById(serviceId)
-                    .filter(x -> x.getMerchant().getId().equals(m.getId()))
-                    .orElseThrow(() -> ApiException.notFound("Service"));
-            duration = s.getDurationMin();
+        if (serviceIds != null && !serviceIds.isEmpty()) {
+            duration = resolveServices(m, serviceIds).stream().mapToInt(ServiceOffering::getDurationMin).sum();
         }
         OpeningHours h = OpeningHours.of(m);
-        Set<LocalDateTime> taken = new HashSet<>(bookings.findTakenSlots(m.getId(), date.atStartOfDay(),
-                date.plusDays(1).atStartOfDay(), BookingStatus.ACTIVE));
+        List<TimeRange> busy = bookings.findBusy(m.getId(), date.atStartOfDay(),
+                date.plusDays(1).atStartOfDay(), BookingStatus.ACTIVE);
         return new SlotsResponse(date, SlotCalculator.isOpenOn(h, date),
-                SlotCalculator.slots(h, date, duration, LocalDateTime.now(clock), taken, props.booking().leadMinutes()));
+                SlotCalculator.slots(h, date, duration, LocalDateTime.now(clock), busy, props.booking().leadMinutes()));
+    }
+
+    /** Active services of this shop, in the order given; all must be for the same vehicle type. */
+    List<ServiceOffering> resolveServices(Merchant m, List<Long> ids) {
+        if (ids.isEmpty()) throw ApiException.badRequest("NO_SERVICE", "Select at least one service");
+        List<ServiceOffering> list = new ArrayList<>();
+        for (Long id : ids.stream().distinct().toList()) {
+            list.add(services.findById(id)
+                    .filter(x -> x.getMerchant().getId().equals(m.getId()) && x.isActive())
+                    .orElseThrow(() -> ApiException.notFound("Service")));
+        }
+        if (list.stream().map(ServiceOffering::getVehicleType).distinct().count() > 1) {
+            throw ApiException.badRequest("MIXED_VEHICLES", "Book bike and car services separately");
+        }
+        return list;
     }
 
     Merchant publicShop(Long merchantId) {
